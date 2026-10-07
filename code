@@ -1,0 +1,1172 @@
+# ============================================================
+# WasteWise Vision
+# Smart Waste Classification Using CNN
+# COMPLETE ONE-CELL JUPYTER PROGRAM
+# ============================================================
+
+import os
+import sys
+import shutil
+import zipfile
+import urllib.request
+from pathlib import Path
+
+# ============================================================
+# 1. INSTALL REQUIRED PACKAGES
+# ============================================================
+
+required_packages = {
+    "numpy": "numpy",
+    "pandas": "pandas",
+    "tensorflow": "tensorflow",
+    "PIL": "Pillow",
+    "matplotlib": "matplotlib"
+}
+
+print("=" * 70)
+print("              WASTEWISE VISION")
+print("       Smart Waste Classification Using CNN")
+print("=" * 70)
+
+print("\nChecking required packages...\n")
+
+for import_name, package_name in required_packages.items():
+
+    try:
+        __import__(import_name)
+        print(f"✓ {package_name} is installed")
+
+    except ImportError:
+
+        print(f"Installing {package_name}...")
+
+        subprocess_command = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            package_name
+        ]
+
+        import subprocess
+
+        subprocess.check_call(
+            subprocess_command
+        )
+
+print("\nAll required packages are ready.")
+
+
+# ============================================================
+# 2. IMPORT LIBRARIES
+# ============================================================
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras import layers
+from tensorflow.keras import models
+
+from tensorflow.keras.preprocessing.image import (
+    ImageDataGenerator
+)
+
+from tensorflow.keras.callbacks import (
+    EarlyStopping
+)
+
+
+# ============================================================
+# 3. PROJECT LOCATION
+# ============================================================
+
+PROJECT_DIR = Path(
+    r"C:\Users\MOULIKA\Downloads\WasteWise-Vision"
+)
+
+PROJECT_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+os.chdir(
+    PROJECT_DIR
+)
+
+print("\nProject folder:")
+print(PROJECT_DIR)
+
+
+# ============================================================
+# 4. DATASET SETTINGS
+# ============================================================
+
+DATASET_URL = (
+    "https://github.com/garythung/trashnet/"
+    "raw/master/data/dataset-resized.zip"
+)
+
+ZIP_FILE = (
+    PROJECT_DIR /
+    "dataset-resized.zip"
+)
+
+EXTRACT_DIR = (
+    PROJECT_DIR /
+    "dataset-resized"
+)
+
+SMALL_DATASET = (
+    PROJECT_DIR /
+    "small_dataset"
+)
+
+MODEL_FILE = (
+    PROJECT_DIR /
+    "wastewise_cnn.keras"
+)
+
+CLASS_FILE = (
+    PROJECT_DIR /
+    "class_names.txt"
+)
+
+# Five classes for the small demo
+
+CLASSES = [
+    "cardboard",
+    "glass",
+    "metal",
+    "paper",
+    "plastic"
+]
+
+# Number of images used from each class
+
+IMAGES_PER_CLASS = 100
+
+IMAGE_SIZE = (
+    128,
+    128
+)
+
+BATCH_SIZE = 16
+
+EPOCHS = 10
+
+
+# ============================================================
+# 5. DOWNLOAD ACTUAL IMAGE DATASET
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 1 - PREPARING DATASET")
+print("=" * 70)
+
+
+# Remove previously extracted incorrect dataset
+
+if EXTRACT_DIR.exists():
+
+    print(
+        "\nRemoving old dataset folder..."
+    )
+
+    shutil.rmtree(
+        EXTRACT_DIR
+    )
+
+
+# Remove previous small dataset
+
+if SMALL_DATASET.exists():
+
+    print(
+        "Removing old small dataset..."
+    )
+
+    shutil.rmtree(
+        SMALL_DATASET
+    )
+
+
+# Remove old ZIP if it exists
+
+if ZIP_FILE.exists():
+
+    print(
+        "Removing old ZIP file..."
+    )
+
+    ZIP_FILE.unlink()
+
+
+# ============================================================
+# 6. DOWNLOAD
+# ============================================================
+
+print(
+    "\nDownloading the actual TrashNet image dataset..."
+)
+
+print(
+    "Please wait. The file may take some time."
+)
+
+try:
+
+    request = urllib.request.Request(
+        DATASET_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
+    with urllib.request.urlopen(
+        request,
+        timeout=300
+    ) as response:
+
+        dataset_data = response.read()
+
+    with open(
+        ZIP_FILE,
+        "wb"
+    ) as file:
+
+        file.write(
+            dataset_data
+        )
+
+    print(
+        "\n✓ Dataset download completed."
+    )
+
+    print(
+        "Downloaded size:",
+        round(
+            len(dataset_data) /
+            (1024 * 1024),
+            2
+        ),
+        "MB"
+    )
+
+except Exception as error:
+
+    print(
+        "\nDATASET DOWNLOAD FAILED"
+    )
+
+    print(
+        error
+    )
+
+    raise SystemExit
+
+
+# ============================================================
+# 7. EXTRACT DATASET
+# ============================================================
+
+print(
+    "\nExtracting dataset..."
+)
+
+try:
+
+    with zipfile.ZipFile(
+        ZIP_FILE,
+        "r"
+    ) as zip_file:
+
+        zip_file.extractall(
+            PROJECT_DIR
+        )
+
+    print(
+        "✓ Dataset extracted."
+    )
+
+except Exception as error:
+
+    print(
+        "\nDATASET EXTRACTION FAILED"
+    )
+
+    print(
+        error
+    )
+
+    raise SystemExit
+
+
+# ============================================================
+# 8. FIND ACTUAL IMAGE FOLDERS
+# ============================================================
+
+print(
+    "\nChecking downloaded images..."
+)
+
+# The ZIP normally creates dataset-resized/
+# containing the six class folders.
+
+if not EXTRACT_DIR.exists():
+
+    print(
+        "\nERROR: dataset-resized folder was not found."
+    )
+
+    raise SystemExit
+
+
+# ============================================================
+# 9. CHECK ALL ORIGINAL IMAGES
+# ============================================================
+
+print("\nOriginal dataset:")
+
+original_total = 0
+
+for class_name in CLASSES:
+
+    class_folder = (
+        EXTRACT_DIR /
+        class_name
+    )
+
+    if not class_folder.exists():
+
+        print(
+            class_name,
+            "-> FOLDER NOT FOUND"
+        )
+
+        continue
+
+
+    image_files = []
+
+    for extension in [
+        "*.jpg",
+        "*.jpeg",
+        "*.png",
+        "*.JPG",
+        "*.JPEG",
+        "*.PNG"
+    ]:
+
+        image_files.extend(
+            class_folder.glob(
+                extension
+            )
+        )
+
+
+    print(
+        f"{class_name:12s} -> "
+        f"{len(image_files)} images"
+    )
+
+    original_total += len(
+        image_files
+    )
+
+
+print(
+    "\nTotal original images found:",
+    original_total
+)
+
+
+# ============================================================
+# 10. STOP IF THERE ARE NO IMAGES
+# ============================================================
+
+if original_total == 0:
+
+    print(
+        "\nERROR:"
+    )
+
+    print(
+        "No images were found in the downloaded dataset."
+    )
+
+    print(
+        "Training will NOT start."
+    )
+
+    raise SystemExit
+
+
+# ============================================================
+# 11. CREATE SMALL DATASET
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 2 - CREATING SMALL SAMPLE DATASET")
+print("=" * 70)
+
+
+SMALL_DATASET.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+small_total = 0
+
+
+for class_name in CLASSES:
+
+    source_folder = (
+        EXTRACT_DIR /
+        class_name
+    )
+
+    destination_folder = (
+        SMALL_DATASET /
+        class_name
+    )
+
+    destination_folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+
+    image_files = []
+
+    for extension in [
+        "*.jpg",
+        "*.jpeg",
+        "*.png",
+        "*.JPG",
+        "*.JPEG",
+        "*.PNG"
+    ]:
+
+        image_files.extend(
+            source_folder.glob(
+                extension
+            )
+        )
+
+
+    # Use only 100 images per class
+
+    selected_images = (
+        image_files[
+            :IMAGES_PER_CLASS
+        ]
+    )
+
+
+    for image_file in selected_images:
+
+        destination_file = (
+            destination_folder /
+            image_file.name
+        )
+
+        shutil.copy2(
+            image_file,
+            destination_file
+        )
+
+
+    print(
+        f"{class_name:12s} -> "
+        f"{len(selected_images)} images"
+    )
+
+    small_total += len(
+        selected_images
+    )
+
+
+# ============================================================
+# 12. VERIFY SMALL DATASET
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 3 - VERIFYING SMALL DATASET")
+print("=" * 70)
+
+
+if small_total == 0:
+
+    print(
+        "\nERROR: Small dataset is empty."
+    )
+
+    raise SystemExit
+
+
+print(
+    "\nTotal sample images:",
+    small_total
+)
+
+
+# ============================================================
+# 13. LOAD IMAGES
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 4 - PREPARING CNN DATA")
+print("=" * 70)
+
+
+train_datagen = ImageDataGenerator(
+
+    rescale=1.0 / 255.0,
+
+    validation_split=0.2,
+
+    rotation_range=15,
+
+    width_shift_range=0.1,
+
+    height_shift_range=0.1,
+
+    zoom_range=0.1,
+
+    horizontal_flip=True
+)
+
+
+validation_datagen = ImageDataGenerator(
+
+    rescale=1.0 / 255.0,
+
+    validation_split=0.2
+)
+
+
+train_generator = (
+    train_datagen.flow_from_directory(
+
+        SMALL_DATASET,
+
+        target_size=IMAGE_SIZE,
+
+        batch_size=BATCH_SIZE,
+
+        class_mode="categorical",
+
+        subset="training",
+
+        shuffle=True
+    )
+)
+
+
+validation_generator = (
+    validation_datagen.flow_from_directory(
+
+        SMALL_DATASET,
+
+        target_size=IMAGE_SIZE,
+
+        batch_size=BATCH_SIZE,
+
+        class_mode="categorical",
+
+        subset="validation",
+
+        shuffle=False
+    )
+)
+
+
+# ============================================================
+# 14. CHECK GENERATORS
+# ============================================================
+
+print(
+    "\nTraining images:",
+    train_generator.samples
+)
+
+print(
+    "Validation images:",
+    validation_generator.samples
+)
+
+print(
+    "\nClass mapping:"
+)
+
+print(
+    train_generator.class_indices
+)
+
+
+if train_generator.samples == 0:
+
+    print(
+        "\nERROR: Training dataset contains zero images."
+    )
+
+    raise SystemExit
+
+
+if validation_generator.samples == 0:
+
+    print(
+        "\nERROR: Validation dataset contains zero images."
+    )
+
+    raise SystemExit
+
+
+# ============================================================
+# 15. GET CLASS NAMES
+# ============================================================
+
+class_names = list(
+    train_generator.class_indices.keys()
+)
+
+print(
+    "\nClasses used by the CNN:"
+)
+
+for number, name in enumerate(
+    class_names
+):
+
+    print(
+        number,
+        "->",
+        name
+    )
+
+
+# ============================================================
+# 16. CREATE CNN MODEL
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 5 - CREATING CNN MODEL")
+print("=" * 70)
+
+
+model = models.Sequential([
+
+    layers.Input(
+        shape=(
+            IMAGE_SIZE[0],
+            IMAGE_SIZE[1],
+            3
+        )
+    ),
+
+    # First convolution block
+
+    layers.Conv2D(
+        32,
+        (3, 3),
+        activation="relu"
+    ),
+
+    layers.MaxPooling2D(
+        (2, 2)
+    ),
+
+    # Second convolution block
+
+    layers.Conv2D(
+        64,
+        (3, 3),
+        activation="relu"
+    ),
+
+    layers.MaxPooling2D(
+        (2, 2)
+    ),
+
+    # Third convolution block
+
+    layers.Conv2D(
+        128,
+        (3, 3),
+        activation="relu"
+    ),
+
+    layers.MaxPooling2D(
+        (2, 2)
+    ),
+
+    # Classification layers
+
+    layers.Flatten(),
+
+    layers.Dense(
+        128,
+        activation="relu"
+    ),
+
+    layers.Dropout(
+        0.3
+    ),
+
+    layers.Dense(
+        len(class_names),
+        activation="softmax"
+    )
+])
+
+
+# ============================================================
+# 17. COMPILE
+# ============================================================
+
+model.compile(
+
+    optimizer="adam",
+
+    loss="categorical_crossentropy",
+
+    metrics=[
+        "accuracy"
+    ]
+)
+
+
+print(
+    "\n✓ CNN created successfully."
+)
+
+print(
+    "\nModel summary:"
+)
+
+model.summary()
+
+
+# ============================================================
+# 18. EARLY STOPPING
+# ============================================================
+
+early_stopping = EarlyStopping(
+
+    monitor="val_loss",
+
+    patience=3,
+
+    restore_best_weights=True
+)
+
+
+# ============================================================
+# 19. TRAIN
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 6 - TRAINING CNN")
+print("=" * 70)
+
+print(
+    "\nTraining will now start..."
+)
+
+print(
+    "This may take several minutes."
+)
+
+
+history = model.fit(
+
+    train_generator,
+
+    validation_data=validation_generator,
+
+    epochs=EPOCHS,
+
+    callbacks=[
+        early_stopping
+    ]
+)
+
+
+# ============================================================
+# 20. EVALUATE
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 7 - MODEL EVALUATION")
+print("=" * 70)
+
+
+validation_loss, validation_accuracy = (
+    model.evaluate(
+        validation_generator,
+        verbose=1
+    )
+)
+
+
+accuracy_percentage = (
+    float(validation_accuracy) * 100
+)
+
+
+print(
+    "\nActual Validation Accuracy:"
+)
+
+print(
+    f"{accuracy_percentage:.2f}%"
+)
+
+
+print(
+    "\nValidation Loss:"
+)
+
+print(
+    f"{float(validation_loss):.4f}"
+)
+
+
+# ============================================================
+# 21. SAVE MODEL
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 8 - SAVING MODEL")
+print("=" * 70)
+
+
+model.save(
+    MODEL_FILE
+)
+
+print(
+    "\n✓ CNN model saved:"
+)
+
+print(
+    MODEL_FILE
+)
+
+
+# ============================================================
+# 22. SAVE CLASS NAMES
+# ============================================================
+
+with open(
+    CLASS_FILE,
+    "w"
+) as file:
+
+    for class_name in class_names:
+
+        file.write(
+            class_name + "\n"
+        )
+
+
+print(
+    "\n✓ Class names saved:"
+)
+
+print(
+    CLASS_FILE
+)
+
+
+# ============================================================
+# 23. SHOW ACCURACY GRAPH
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STEP 9 - TRAINING GRAPH")
+print("=" * 70)
+
+
+plt.figure(
+    figsize=(10, 5)
+)
+
+plt.plot(
+    history.history["accuracy"],
+    label="Training Accuracy"
+)
+
+plt.plot(
+    history.history["val_accuracy"],
+    label="Validation Accuracy"
+)
+
+plt.title(
+    "WasteWise Vision - CNN Accuracy"
+)
+
+plt.xlabel(
+    "Epoch"
+)
+
+plt.ylabel(
+    "Accuracy"
+)
+
+plt.legend()
+
+plt.grid(
+    True
+)
+
+plt.show()
+
+
+# ============================================================
+# 24. PREDICTION FUNCTION
+# ============================================================
+
+def predict_waste(
+    image_path
+):
+
+    image = (
+        tf.keras.utils.load_img(
+            image_path,
+            target_size=IMAGE_SIZE
+        )
+    )
+
+
+    image_array = (
+        tf.keras.utils.img_to_array(
+            image
+        )
+    )
+
+
+    image_array = (
+        image_array / 255.0
+    )
+
+
+    image_array = np.expand_dims(
+        image_array,
+        axis=0
+    )
+
+
+    predictions = (
+        model.predict(
+            image_array,
+            verbose=0
+        )
+    )
+
+
+    predicted_index = int(
+        np.argmax(
+            predictions[0]
+        )
+    )
+
+
+    predicted_class = (
+        class_names[
+            predicted_index
+        ]
+    )
+
+
+    confidence = (
+        predictions[0][
+            predicted_index
+        ] * 100
+    )
+
+
+    print("\n")
+    print("=" * 70)
+    print("STEP 10 - WASTE PREDICTION")
+    print("=" * 70)
+
+
+    print(
+        "\nImage:"
+    )
+
+    print(
+        image_path
+    )
+
+
+    print(
+        "\nPredicted Waste:"
+    )
+
+    print(
+        predicted_class.upper()
+    )
+
+
+    print(
+        "\nConfidence:"
+    )
+
+    print(
+        f"{float(confidence):.2f}%"
+    )
+
+
+    # Display image
+
+    plt.figure(
+        figsize=(5, 5)
+    )
+
+    plt.imshow(
+        image
+    )
+
+    plt.title(
+        f"Predicted: {predicted_class}\n"
+        f"Confidence: {confidence:.2f}%"
+    )
+
+    plt.axis(
+        "off"
+    )
+
+    plt.show()
+
+
+    return (
+        predicted_class,
+        float(confidence)
+    )
+
+
+# ============================================================
+# 25. FIND A REAL TEST IMAGE
+# ============================================================
+
+test_image = None
+
+for class_name in class_names:
+
+    class_folder = (
+        SMALL_DATASET /
+        class_name
+    )
+
+
+    image_files = []
+
+    for extension in [
+        "*.jpg",
+        "*.jpeg",
+        "*.png",
+        "*.JPG",
+        "*.JPEG",
+        "*.PNG"
+    ]:
+
+        image_files.extend(
+            class_folder.glob(
+                extension
+            )
+        )
+
+
+    if len(image_files) > 0:
+
+        test_image = (
+            image_files[0]
+        )
+
+        break
+
+
+# ============================================================
+# 26. TEST MODEL
+# ============================================================
+
+if test_image is not None:
+
+    predict_waste(
+        test_image
+    )
+
+else:
+
+    print(
+        "\nNo test image was found."
+    )
+
+
+# ============================================================
+# 27. FINAL RESULT
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("          WASTEWISE VISION COMPLETED")
+print("=" * 70)
+
+print(
+    "\nProject:"
+)
+
+print(
+    "WasteWise Vision – Smart Waste Classification Using CNN"
+)
+
+print(
+    "\nClasses:"
+)
+
+print(
+    ", ".join(
+        class_names
+    )
+)
+
+print(
+    "\nTotal sample images:"
+)
+
+print(
+    small_total
+)
+
+print(
+    "\nActual validation accuracy:"
+)
+
+print(
+    f"{accuracy_percentage:.2f}%"
+)
+
+print(
+    "\nSaved model:"
+)
+
+print(
+    MODEL_FILE
+)
+
+print(
+    "\n✓ Project completed successfully!"
+)
